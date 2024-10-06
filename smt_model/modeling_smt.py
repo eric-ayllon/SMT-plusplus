@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -395,14 +397,23 @@ class SMTModelForCausalLM(PreTrainedModel):
         predicted_sequence = torch.from_numpy(np.asarray([self.w2i['<bos>']])).to(input.device).unsqueeze(0)
         encoder_output = self.forward_encoder(input)
         text_sequence = []
+
+        predictions: Optional[SMTOutput] = None
+
+        logit_sequence = torch.zeros((1, self.decoder.out_layer.out_channels), device=input.device)
+        logit_sequence[:, self.w2i["<bos>"]] = 100
+
         for i in range(self.maxlen - predicted_sequence.shape[-1]):
             predictions = self.forward_decoder(encoder_output, predicted_sequence.long())
             predicted_token = torch.argmax(predictions.logits[:, :, -1]).item()
             predicted_sequence = torch.cat([predicted_sequence, torch.argmax(predictions.logits[:, :, -1], dim=1, keepdim=True)], dim=1)
+
+            logit_sequence = torch.cat([logit_sequence, predictions.logits[:, :, -1]], dim=1)
+
             if convert_to_str:
                 predicted_token = f"{predicted_token}"
             if self.i2w[predicted_token] == '<eos>':
                 break
             text_sequence.append(self.i2w[predicted_token])
         
-        return text_sequence, predictions
+        return text_sequence, predictions, logit_sequence
