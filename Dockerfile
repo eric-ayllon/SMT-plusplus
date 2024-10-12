@@ -8,8 +8,11 @@ RUN useradd -u ${UID} ${USERNAME}
 
 RUN apt update --fix-missing
 RUN apt install build-essential -y
+RUN apt clean
 RUN apt install ffmpeg libsm6 -y
+RUN apt clean
 RUN apt install neovim -y
+RUN apt clean
 RUN apt install imagemagick -y
 RUN apt clean
 
