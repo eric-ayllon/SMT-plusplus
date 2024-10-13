@@ -229,7 +229,7 @@ if __name__ == "__main__":
 
 	# Data
 	parser.add_argument("--dataset-name", action="store", default="mozarteum", type=str) # Default to mozarteum
-	parser.add_argument("--dataset-splits", action="store", default=["train"], type=str, nargs="+") # Default to only train
+	parser.add_argument("--dataset-splits", action="store", default=["train", "val", "test"], type=str, nargs="+") # Default to only all
 
 	# Model
 	parser.add_argument("--model", action="store", default="antoniorv6/smtpp_mozarteum", type=str)
@@ -247,4 +247,4 @@ if __name__ == "__main__":
 	if not args.log:
 		args.run_mode = "disabled"
 
-	main(args)
+	main(args) # TODO: SOLVE THIS (?) It ate all the RAM from arale
