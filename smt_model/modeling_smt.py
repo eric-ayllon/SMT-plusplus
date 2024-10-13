@@ -416,4 +416,4 @@ class SMTModelForCausalLM(PreTrainedModel):
                 break
             text_sequence.append(self.i2w[predicted_token])
         
-        return text_sequence, predictions, logit_sequence
+        return text_sequence, predictions, logit_sequence.detach()
