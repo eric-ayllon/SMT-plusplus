@@ -2,7 +2,7 @@ FROM pytorch/pytorch:2.0.0-cuda11.7-cudnn8-devel
 
 ARG USERNAME
 ARG UID
-ARG WANDB_KEY
+ARG WANDB_KEY_FILE
 
 RUN useradd -u ${UID} ${USERNAME}
 
@@ -25,4 +25,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN pip install wandb
-RUN wandb login ${WANDB_KEY}
+
+COPY ${WANDB_KEY_FILE} /wandb_key
+RUN wandb login $(cat /wandb_key)
+RUN rm /wandb_key
