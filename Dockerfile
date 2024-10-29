@@ -16,16 +16,21 @@ RUN apt clean
 RUN apt install imagemagick -y
 RUN apt clean
 
-
 RUN pip install --upgrade pip
+
+
+RUN pip install wandb
+
+COPY ${WANDB_KEY_FILE} /wandb_key
+RUN chown ${USERNAME} /wandb_key
+RUN su ${USERNAME}
+RUN wandb login $(cat /wandb_key)
+RUN rm /wandb_key
+RUN su
+
+
 RUN pip install pybind11 
 
 COPY requirements.txt ./
 
 RUN pip install --no-cache-dir -r requirements.txt
-
-RUN pip install wandb
-
-COPY ${WANDB_KEY_FILE} /wandb_key
-RUN wandb login $(cat /wandb_key)
-RUN rm /wandb_key

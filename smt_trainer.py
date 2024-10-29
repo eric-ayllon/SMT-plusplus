@@ -36,7 +36,8 @@ class SMTPP_Trainer(L.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(list(self.model.encoder.parameters()) + list(self.model.decoder.parameters()), lr=1e-4, amsgrad=False)
     
-    def forward(self, input, last_preds) -> torch.Any:
+    # def forward(self, input, last_preds) -> torch.Any:
+    def forward(self, input, last_preds):
         return self.model(input, last_preds)
     
     def training_step(self, batch):
@@ -100,7 +101,8 @@ class SMTPP_Trainer(L.LightningModule):
         
         return ser
     
-    def test_step(self, test_batch) -> torch.Tensor | torch.Dict[str, torch.Any] | None:
+    # def test_step(self, test_batch) -> torch.Tensor | torch.Dict[str, torch.Any] | None:
+    def test_step(self, test_batch):
         return self.validation_step(test_batch)
     
     def on_test_epoch_end(self) -> None:

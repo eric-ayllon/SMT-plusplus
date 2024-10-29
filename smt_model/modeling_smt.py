@@ -393,6 +393,7 @@ class SMTModelForCausalLM(PreTrainedModel):
         return output
         
     
+    @torch.no_grad()
     def predict(self, input, convert_to_str=False):
         predicted_sequence = torch.from_numpy(np.asarray([self.w2i['<bos>']])).to(input.device).unsqueeze(0)
         encoder_output = self.forward_encoder(input)
@@ -400,7 +401,7 @@ class SMTModelForCausalLM(PreTrainedModel):
 
         predictions: Optional[SMTOutput] = None
 
-        logit_sequence = torch.zeros((1, self.decoder.out_layer.out_channels), device=input.device)
+        logit_sequence = torch.zeros((1, self.decoder.out_layer.out_channels))
         logit_sequence[:, self.w2i["<bos>"]] = 100
 
         for i in range(self.maxlen - predicted_sequence.shape[-1]):
@@ -408,7 +409,7 @@ class SMTModelForCausalLM(PreTrainedModel):
             predicted_token = torch.argmax(predictions.logits[:, :, -1]).item()
             predicted_sequence = torch.cat([predicted_sequence, torch.argmax(predictions.logits[:, :, -1], dim=1, keepdim=True)], dim=1)
 
-            logit_sequence = torch.cat([logit_sequence, predictions.logits[:, :, -1]], dim=1)
+            logit_sequence = torch.cat([logit_sequence, predictions.logits[:, :, -1].detach().cpu()], dim=1)
 
             if convert_to_str:
                 predicted_token = f"{predicted_token}"

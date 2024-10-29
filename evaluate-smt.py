@@ -2,6 +2,7 @@ from typing import Union, Sequence, Optional, Dict, Tuple, List
 from torch import Tensor
 
 from smt_model.modeling_smt import SMTModelForCausalLM
+from smt_trainer import SMTPP_Trainer
 from data import parse_kern_file
 from torch.cuda import is_available as cuda_enabled
 
@@ -115,6 +116,9 @@ def convert_img_to_tensor(image):
 
     return image
 
+def tokenize_transcription(transcription):
+        return parse_kern_file(transcription, "bekern")
+
 def encode_transcription(transcription, w2i):
 	print("Encoding transcription:")
 	print(transcription)
@@ -173,9 +177,14 @@ def evaluateSMTPP(model, dataset, w2i, i2w, logger: Union[Run, RunDisabled], dev
 	for sample_idx, sample in enumerate(dataset):
 		image = sample["image"]
 		ground_truth = sample["transcription"]
-		target = encode_transcription(ground_truth, w2i)
+		target = tokenize_transcription(ground_truth)
 
-		predictions, _, logit_sequence = model.predict(convert_img_to_tensor(image).unsqueeze(0).to(device), convert_to_str=True)
+		# print(torch.cuda.mem_get_info(device))
+		image_tensor = convert_img_to_tensor(image).unsqueeze(0).to(device)
+		# print(torch.cuda.mem_get_info(device))
+
+		# predictions, _, logit_sequence = model.predict(image_tensor, convert_to_str=True)
+		predictions, _, logit_sequence = model.predict(image_tensor)
 
 		print("prediction:")
 		print(predictions)
@@ -184,28 +193,27 @@ def evaluateSMTPP(model, dataset, w2i, i2w, logger: Union[Run, RunDisabled], dev
 		print("ground_truth:")
 		print(ground_truth)
 
-		exit()
-
 		# Get confidences
 		# logits (1, length, vocabulary) -> probabilities (1, length, vocabulary) -> confidences (1, length)
 		confidences = logit_sequence.softmax(dim=-1).max(dim=-1)[0].tolist()
-		distance = levenshtein(predictions, target)
+		distance = levenshtein(predictions, target)[0]
 		totalDistance += distance
-		totalLength += len(ground_truth)
+		totalLength += len(target)
 
 		logger.log({
 					"sample": sample_idx,
 					# # "logits": logits[sample_idx, :widths[sample_idx]].tolist(),
 					"confidences": confidences,
-					"prediction": [i2w[int(t.item())] for t in predictions],
-					"target": ground_truth,
+					"prediction": predictions,
+					"target": target,
 					"edit distance": distance,
-					# # "length": length,
+					"length": len(target),
 					# # "SER": 100.0*distance/length,
 					# "decoded frames": decoded_frames.tolist(),
 					# "edit operations": operations.tolist(),
 					# "frame errors": frame_errors.tolist(),
 					})
+		exit()
 
 def main(args: Namespace):
 	logger = getLogger(args)
@@ -216,14 +224,16 @@ def main(args: Namespace):
 		print("w2i", type(w2i), ":", w2i)
 		print("i2w", type(w2i), ":", i2w)
 
-		model = SMTModelForCausalLM.from_pretrained("antoniorv6/smtpp_mozarteum").to(args.device)
+		# model = SMTModelForCausalLM.from_pretrained("antoniorv6/smtpp_mozarteum").to(args.device)
+		# model = SMTPP_Trainer(maxh=2512, maxw=2512, maxlen=5512, out_categories=191, padding_token=0, in_channels=1, w2i=w2i, i2w=i2w, d_model=256, dim_ff=256, num_dec_layers=8).load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
+		model = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
 
 		evaluateSMTPP(model, dataset, w2i, i2w, logger, args.device)
 
 if __name__ == "__main__":
 	parser = ArgumentParser(
-											prog="HTR-OMR",
-											description="Main python script for general HTR or OMR projects.",
+											prog="OMR SMTPP",
+											description="Python script for evaluating the SMTPP.",
 											epilog=""
 											)
 
