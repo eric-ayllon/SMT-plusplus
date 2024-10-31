@@ -118,7 +118,6 @@ if __name__ == "__main__":
 
 	# Logging
 	parser.add_argument('--log', action=BooleanOptionalAction, default=True, type=bool)
-	parser.add_argument("--wandb-path", action="store", type=str)
 	parser.add_argument("--wandb-project", action="store", default="Test", type=str)
 	parser.add_argument("--wandb-group", action="store", type=str)
 	parser.add_argument("--wandb-name", action="store", type=str)
