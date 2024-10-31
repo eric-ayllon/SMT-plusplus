@@ -13,8 +13,30 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 from lightning.pytorch import Trainer
 
+# Huggingface
+from datasets import load_dataset, concatenate_datasets
+
 # Others
-from trainer import SMTPP_Trainer
+from smt_trainer import SMTPP_Trainer
+from smt_model.modeling_smt import SMTModelForCausalLM
+
+import yaml
+
+def getData(args: Namespace):
+	dataConfig: dict
+	with open(args.dataset_config_path+args.dataset_config+".yaml", "r") as dataConfigFile:
+		dataConfig = yaml.safe_load(dataConfigFile)["dataset"]
+
+	# load dataset using Huggingface
+	ds = load_dataset(dataConfig["root"]+args.dataset_name)
+	dataset = concatenate_datasets([ds["train"], ds["val"], ds["test"]])
+
+	train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
+	val_dataset = dataset.select((i for i in range(len(dataset)) if i not in dataConfig["samples_to_use"]))
+
+	print("Number of training samples:", len(train_dataset))
+	print("Number of validation samples:", len(val_dataset))
+	exit()
 
 def getLogger(args: Namespace):
 	logger_args = {k[6:]: v for k, v in vars(args).items() if "wandb" in k}
@@ -38,6 +60,9 @@ def getModelWrapper(args: Namespace):
 def main(args: Namespace):
 	fold_str: str = ""
 
+	# get data
+	data = getData(args)
+
 	# get logger
 	logger = getLogger(args)
 
@@ -50,7 +75,7 @@ def main(args: Namespace):
 
 	model_wrapper = getModelWrapper(args)
 
-    trainer.fit(model_wrapper, datamodule=data)
+	trainer.fit(model_wrapper, datamodule=data)
 
 if __name__ == "__main__":
 	parser = ArgumentParser(
