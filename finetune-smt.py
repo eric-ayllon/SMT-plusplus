@@ -20,7 +20,10 @@ from datasets import load_dataset, concatenate_datasets
 from smt_trainer import SMTPP_Trainer
 from smt_model.modeling_smt import SMTModelForCausalLM
 
+from dataModules import HuggingfaceDataset
+
 import yaml
+import numpy as np
 
 def getData(args: Namespace):
 	dataConfig: dict
@@ -31,12 +34,27 @@ def getData(args: Namespace):
 	ds = load_dataset(dataConfig["root"]+args.dataset_name)
 	dataset = concatenate_datasets([ds["train"], ds["val"], ds["test"]])
 
+	# Separate selected samples for training and the rest for validation
 	train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
 	val_dataset = dataset.select((i for i in range(len(dataset)) if i not in dataConfig["samples_to_use"]))
 
 	print("Number of training samples:", len(train_dataset))
 	print("Number of validation samples:", len(val_dataset))
-	exit()
+
+	# Get vocabulary
+	vocab_name: str = args.dataset_name.replace("-", " ").title().replace(" ", "_")
+	w2i = np.load(f"./vocab/{vocab_name}_BeKernw2i.npy", allow_pickle=True).item()
+	i2w = np.load(f"./vocab/{vocab_name}_BeKerni2w.npy", allow_pickle=True).item()
+
+	dataset = HuggingfaceDataset(
+								train_dataset, val_dataset, val_dataset, w2i, i2w,
+								batch_size=1,
+								num_workers=20,
+								tokenization_mode="bekern",
+								reduce_ratio=1.0
+								)
+
+	return dataset
 
 def getLogger(args: Namespace):
 	logger_args = {k[6:]: v for k, v in vars(args).items() if "wandb" in k}
