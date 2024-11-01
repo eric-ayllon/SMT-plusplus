@@ -8,268 +8,256 @@ from torch.cuda import is_available as cuda_enabled
 
 from argparse import ArgumentParser, Namespace, BooleanOptionalAction
 from torch import\
-                int as torchint,\
-                zeros
+				int as torchint,\
+				zeros
 
 from wandb.sdk.wandb_run import Run
 from wandb.sdk.lib import RunDisabled
 
 import numpy as np
-import pandas as pd
 import torch
 import wandb
+import yaml
 
 from torchvision import transforms
 from datasets import load_dataset, concatenate_datasets
 
+from lightning.pytorch.loggers import WandbLogger
+
 def levenshtein(s1: Sequence, s2: Sequence, i2t: Optional[Dict[int, str]] = None) -> Tuple[int, Tensor]:
-    # Storage initialization
-    storage: List[List[int]] = [[0 for _ in range(len(s2)+1)] for _ in range(len(s1)+1)]
-    storage[0] = list(range(len(s2)+1))
-    for i in range(len(s1)+1):
-        storage[i][0] = i
+	# Storage initialization
+	storage: List[List[int]] = [[0 for _ in range(len(s2)+1)] for _ in range(len(s1)+1)]
+	storage[0] = list(range(len(s2)+1))
+	for i in range(len(s1)+1):
+		storage[i][0] = i
 
-    for j in range(1, len(s2)+1):
-        for i in range(1, len(s1)+1):
-            if s1[i-1] == s2[j-1]:
-                substitution: int = 0
-            else:
-                substitution: int = 1
+	for j in range(1, len(s2)+1):
+		for i in range(1, len(s1)+1):
+			if s1[i-1] == s2[j-1]:
+				substitution: int = 0
+			else:
+				substitution: int = 1
 
-            storage[i][j] = min(
-                                storage[i-1][j] + 1, # Deletion
-                                storage[i][j-1] + 1, # Insertion
-                                storage[i-1][j-1] + substitution, # Substitution
-                                )
+			storage[i][j] = min(
+								storage[i-1][j] + 1, # Deletion
+								storage[i][j-1] + 1, # Insertion
+								storage[i-1][j-1] + substitution, # Substitution
+								)
 
-    if i2t is not None:
-        print("   ", end=" ")
-        for s in s2:
-            print(f"{i2t[s]}", end=" ")
-        print()
-        for i, s in enumerate(storage):
-            if i > 0:
-                print(i2t[s1[i-1]], end=" ")
-            else:
-                print(" ", end=" ")
+	if i2t is not None:
+		print("   ", end=" ")
+		for s in s2:
+			print(f"{i2t[s]}", end=" ")
+		print()
+		for i, s in enumerate(storage):
+			if i > 0:
+				print(i2t[s1[i-1]], end=" ")
+			else:
+				print(" ", end=" ")
 
-            for ss in s:
-                print(ss, end=" ")
-            print()
+			for ss in s:
+				print(ss, end=" ")
+			print()
 
-    i: int = len(s1)
-    j: int = len(s2)
-    operations: Tensor = zeros((max(i, j)), dtype=torchint)
-    operation_idx: int = max(i, j)-1
-    # print(i, j)
-    while i + j > 0:
-        current: int = storage[i][j]
-        next = current
-        operation: int = -1
+	i: int = len(s1)
+	j: int = len(s2)
+	operations: Tensor = zeros((max(i, j)), dtype=torchint)
+	operation_idx: int = max(i, j)-1
+	# print(i, j)
+	while i + j > 0:
+		current: int = storage[i][j]
+		next = current
+		operation: int = -1
 
-        next_i: int = i
-        next_j: int = j
-        # print(f"Before: {i=}, {j=}, {current=}, {next=}, {next_i=}, {next_j=}")
+		next_i: int = i
+		next_j: int = j
+		# print(f"Before: {i=}, {j=}, {current=}, {next=}, {next_i=}, {next_j=}")
 
-        if j > 0:
-            if i > 0:
-                if storage[i-1][j-1] <= next:
-                    # print("A")
-                    operation = -1 if storage[i-1][j-1] == next else 0 # Substitution
-                    next = storage[i-1][j-1]
-                    next_i = i-1
-                    next_j = j-1
+		if j > 0:
+			if i > 0:
+				if storage[i-1][j-1] <= next:
+					# print("A")
+					operation = -1 if storage[i-1][j-1] == next else 0 # Substitution
+					next = storage[i-1][j-1]
+					next_i = i-1
+					next_j = j-1
 
-            if storage[i][j-1] < next:
-                # print("B")
-                operation = 1 # Insertion
-                next = storage[i][j-1]
-                next_i = i
-                next_j = j-1
+			if storage[i][j-1] < next:
+				# print("B")
+				operation = 1 # Insertion
+				next = storage[i][j-1]
+				next_i = i
+				next_j = j-1
 
-        if i > 0:
-            if storage[i-1][j] < next:
-                # print("C")
-                operation = 2 # Deletion
-                next = storage[i-1][j]
-                next_i = i-1
-                next_j = j
+		if i > 0:
+			if storage[i-1][j] < next:
+				# print("C")
+				operation = 2 # Deletion
+				next = storage[i-1][j]
+				next_i = i-1
+				next_j = j
 
-        # print(f"After: {i=}, {j=}, {current=}, {next=}, {next_i=}, {next_j=}")
-        # operations.insert(0, operation)
-        operations[operation_idx] = operation
-        operation_idx -= 1
-        # if i == next_i and j == next_j:
-            # break
-        i = next_i
-        j = next_j
+		# print(f"After: {i=}, {j=}, {current=}, {next=}, {next_i=}, {next_j=}")
+		# operations.insert(0, operation)
+		operations[operation_idx] = operation
+		operation_idx -= 1
+		# if i == next_i and j == next_j:
+			# break
+		i = next_i
+		j = next_j
 
-    return storage[len(s1)][len(s2)], operations
+	return storage[len(s1)][len(s2)], operations
 
 def convert_img_to_tensor(image):
-    transform = transforms.Compose([
-        transforms.RandomInvert(p=1.0),
-        transforms.Grayscale(),
-        transforms.ToTensor()
-    ])
+	transform = transforms.Compose([
+		transforms.RandomInvert(p=1.0),
+		transforms.Grayscale(),
+		transforms.ToTensor()
+	])
 
-    image = transform(image)
+	image = transform(image)
 
-    return image
+	return image
 
 def tokenize_transcription(transcription):
-        return parse_kern_file(transcription, "bekern")
+		return parse_kern_file(transcription, "bekern")
 
 def encode_transcription(transcription, w2i):
-    print("Encoding transcription:")
-    print(transcription)
-    transcription = parse_kern_file(transcription, "bekern")
-    print(transcription)
-    return torch.tensor([w2i[t] for t in transcription], dtype=torch.long)
+	print("Encoding transcription:")
+	print(transcription)
+	transcription = parse_kern_file(transcription, "bekern")
+	print(transcription)
+	return torch.tensor([w2i[t] for t in transcription], dtype=torch.long)
 
 def decode_transcription(transcription, i2w):
-    return torch.tensor([i2w[t] for t in transcription], dtype=torch.long)
+	return torch.tensor([i2w[t] for t in transcription], dtype=torch.long)
 
-# def getDataset(datasetName: str, split: str):
-def getDataset(datasetName: str):
-    # Load dataset
-    ds = load_dataset("antoniorv6/"+datasetName)
-    # dataset = pd.concat([ds["train"], ds["val"], ds["test"]])
-    dataset = concatenate_datasets([ds["train"], ds["val"], ds["test"]])
+def getData(args: Namespace):
+	dataConfig: dict
+	with open(args.dataset_config_path+args.dataset_config+".yaml", "r") as dataConfigFile:
+		dataConfig = yaml.safe_load(dataConfigFile)["dataset"]
 
-    # Load vocabulary
-    vocab_name: str = datasetName.replace("-", " ").title().replace(" ", "_")
-    w2i = np.load(f"./vocab/{vocab_name}_BeKernw2i.npy", allow_pickle=True).item()
-    i2w = np.load(f"./vocab/{vocab_name}_BeKerni2w.npy", allow_pickle=True).item()
+	# load dataset using Huggingface
+	ds = load_dataset(dataConfig["root"]+args.dataset_name)
+	dataset = concatenate_datasets([ds["train"], ds["val"], ds["test"]])
 
-    return dataset, w2i, i2w
+	# Separate selected samples for training and the rest for validation
+	# train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
+	val_dataset = dataset.select((i for i in range(len(dataset)) if i not in dataConfig["samples_to_use"]))
 
-def getLogger(args: Namespace) -> Union[Run, RunDisabled]:
-    # Prepare the logger
-    logger = wandb.init(
-                                        entity="eap-team",
-                                        project=args.project,
-                                        id=args.run_id,
+	# print("Number of training samples:", len(train_dataset))
+	# print("Number of validation samples:", len(val_dataset))
 
-                                        name=args.run_name,
-                                        notes="Data for the prediction confidence evaluation.",
+	# Get vocabulary
+	vocab_name: str = args.dataset_name.replace("-", " ").title().replace(" ", "_")
+	w2i = np.load(f"./vocab/{vocab_name}_BeKernw2i.npy", allow_pickle=True).item()
+	i2w = np.load(f"./vocab/{vocab_name}_BeKerni2w.npy", allow_pickle=True).item()
 
-                                        config={**vars(args)},
-                                        mode=args.run_mode
-                                        )
+	return val_dataset, w2i, i2w
 
-    if args.run_mode != "disabled":
-        print(f"WandB ID: {args.run_id}; Mode: {args.run_mode}")
+def getLogger(args: Namespace) -> WandbLogger:
+	logger_args = {k[6:]: v for k, v in vars(args).items() if "wandb" in k}
 
-    return logger
+	return WandbLogger(**logger_args)
 
-def evaluateSMTPP(model, dataset, w2i, i2w, logger: Union[Run, RunDisabled], device = torch.device("cpu")):
-    model.eval()
+def evaluateSMTPP(model, dataset, w2i, i2w, logger: WandbLogger, device = torch.device("cpu")):
+	model.eval()
 
-    logger.define_metric("total edit distance")
-    logger.define_metric("total length")
-    logger.define_metric("total SER")
+	# logger.experiment.summary
+	logger.experiment.define_metric("total edit distance")
+	logger.experiment.define_metric("total length")
+	logger.experiment.define_metric("total SER")
 
-    # logger.define_metric("logits", step_metric="sample") # logits
-    logger.define_metric("confidences", step_metric="sample") # framewise confidences
-    logger.define_metric("prediction", step_metric="sample") # decoded prediction
-    logger.define_metric("target", step_metric="sample") # target
-    logger.define_metric("edit distance", step_metric="sample") # sample edit distance
+	# logger.define_metric("logits", step_metric="sample") # logits
+	logger.experiment.define_metric("confidences", step_metric="sample") # framewise confidences
+	logger.experiment.define_metric("prediction", step_metric="sample") # decoded prediction
+	logger.experiment.define_metric("target", step_metric="sample") # target
+	logger.experiment.define_metric("edit distance", step_metric="sample") # sample edit distance
 
-    totalDistance: int = 0
-    totalLength: int = 0
-    totalSER: float = .0
+	totalDistance: int = 0
+	totalLength: int = 0
 
-    for sample_idx, sample in enumerate(dataset):
-        image = sample["image"]
-        # print("Sample size:", image)
-        ground_truth = sample["transcription"]
-        target = tokenize_transcription(ground_truth)
+	for sample_idx, sample in enumerate(dataset):
+		image = sample["image"]
+		# print("Sample size:", image)
+		ground_truth = sample["transcription"]
+		target = tokenize_transcription(ground_truth)
 
-        # print(torch.cuda.mem_get_info(device))
-        image_tensor = convert_img_to_tensor(image).unsqueeze(0).to(device)
-        # print(torch.cuda.mem_get_info(device))
+		# print(torch.cuda.mem_get_info(device))
+		image_tensor = convert_img_to_tensor(image).unsqueeze(0).to(device)
+		# print(torch.cuda.mem_get_info(device))
 
-        # predictions, _, logit_sequence = model.predict(image_tensor, convert_to_str=True)
-        predictions, _, logit_sequence = model.predict(image_tensor)
+		# predictions, _, logit_sequence = model.predict(image_tensor, convert_to_str=True)
+		predictions, _, logit_sequence = model.predict(image_tensor)
 
-        # print("prediction:")
-        # print(predictions)
-        # print("target:")
-        # print(target)
-        # print("ground_truth:")
-        # print(ground_truth)
+		# print("prediction:")
+		# print(predictions)
+		# print("target:")
+		# print(target)
+		# print("ground_truth:")
+		# print(ground_truth)
 
-        # Get confidences
-        # logits (1, length, vocabulary) -> probabilities (1, length, vocabulary) -> confidences (1, length)
-        confidences = logit_sequence.softmax(dim=-1).max(dim=-1)[0].tolist()
+		# Get confidences
+		# logits (1, length, vocabulary) -> probabilities (1, length, vocabulary) -> confidences (1, length)
+		confidences = logit_sequence.softmax(dim=-1).max(dim=-1)[0].tolist()
 
-        distance = levenshtein(predictions, target)[0]
-        totalDistance += distance
-        totalLength += len(target)
+		distance = levenshtein(predictions, target)[0]
+		totalDistance += distance
+		totalLength += len(target)
 
-        logger.log({
-                    "sample": sample_idx,
-                    # # "logits": logits[sample_idx, :widths[sample_idx]].tolist(),
-                    "confidences": confidences,
-                    "prediction": predictions,
-                    "target": target,
-                    "edit distance": distance,
-                    "length": len(target),
-                    # # "SER": 100.0*distance/length,
-                    # "decoded frames": decoded_frames.tolist(),
-                    # "edit operations": operations.tolist(),
-                    # "frame errors": frame_errors.tolist(),
-                    })
+		logger.log_metrics({
+					"sample": sample_idx,
+					"confidences": confidences,
+					"prediction": predictions,
+					"target": target,
+					"edit distance": distance,
+					"length": len(target),
+					})
+
+	logger.experiment.summary["total edit distance"] = totalDistance
+	logger.experiment.summary["total length"] = totalLength
+	logger.experiment.summary["total SER"] = 100.0*totalDistance/totalLength
 
 def main(args: Namespace):
-    logger = getLogger(args)
+	logger = getLogger(args)
 
-    # for split in args.dataset_splits:
-        # dataset, w2i, i2w = getDataset(args.dataset_name, split)
+	dataset, w2i, i2w = getData(args)
 
-        # print("w2i", type(w2i), ":", w2i)
-        # print("i2w", type(w2i), ":", i2w)
+	model = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
 
-        # # model = SMTModelForCausalLM.from_pretrained("antoniorv6/smtpp_mozarteum").to(args.device)
-        # # model = SMTPP_Trainer(maxh=2512, maxw=2512, maxlen=5512, out_categories=191, padding_token=0, in_channels=1, w2i=w2i, i2w=i2w, d_model=256, dim_ff=256, num_dec_layers=8).load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
-        # model = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
-
-        # evaluateSMTPP(model, dataset, w2i, i2w, logger, args.device)
-    dataset, w2i, i2w = getDataset(args.dataset_name)
-
-    # print("w2i", type(w2i), ":", w2i)
-    # print("i2w", type(w2i), ":", i2w)
-
-    model = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
-
-    evaluateSMTPP(model, dataset, w2i, i2w, logger, args.device)
+	evaluateSMTPP(model, dataset, w2i, i2w, logger, args.device)
 
 if __name__ == "__main__":
-    parser = ArgumentParser(
-                                            prog="OMR SMTPP",
-                                            description="Python script for evaluating the SMTPP.",
-                                            epilog=""
-                                            )
+	parser = ArgumentParser(
+											prog="OMR SMTPP",
+											description="Python script for evaluating the SMTPP.",
+											epilog=""
+											)
 
-    # Data
-    parser.add_argument("--dataset-name", action="store", default="mozarteum", type=str) # Default to mozarteum
-    parser.add_argument("--dataset-splits", action="store", default=["train", "val", "test"], type=str, nargs="+") # Default to only all
+	# Data
+	parser.add_argument("--dataset-name", action="store", default="mozarteum", type=str) # Default to mozarteum
+	parser.add_argument("--dataset-config-path", action="store", type=str, default="config/datasets/")
+	parser.add_argument("--dataset-config", action="store", type=str)
 
-    # Model
-    parser.add_argument("--model", action="store", default="antoniorv6/smtpp_mozarteum", type=str)
-    parser.add_argument("--device", action="store", default="cuda" if cuda_enabled() else "cpu", type=str)
+	# Model
+	parser.add_argument("--model", action="store", type=str) # Huggingface path
+	parser.add_argument("--weights", action="store", type=str) # Local path to checkpoint file
+	parser.add_argument("--device", action="store", default="cuda" if cuda_enabled() else "cpu", type=str)
 
-    # Logging
-    parser.add_argument('--log', action=BooleanOptionalAction, default=True, type=bool)
-    parser.add_argument("--project", action="store", default="Test", type=str)
-    parser.add_argument("--run-name", action="store", type=str)
-    parser.add_argument("--run-id", action="store", default=wandb.util.generate_id(), type=str)
-    parser.add_argument("--run-mode", action="store", default="online", type=str)
+	# Logging
+	parser.add_argument('--log', action=BooleanOptionalAction, default=True, type=bool)
+	parser.add_argument("--wandb-project", action="store", default="SMT Active Learning", type=str)
+	parser.add_argument("--wandb-group", action="store", type=str)
+	parser.add_argument("--wandb-name", action="store", type=str)
+	parser.add_argument("--wandb-id", action="store", default=new_wandb_id(), type=str)
+	parser.add_argument("--wandb-offline", action=BooleanOptionalAction, default=False, type=str)
 
-    args = parser.parse_args()
+	args = parser.parse_args()
 
-    if not args.log:
-        args.run_mode = "disabled"
+	if not args.log:
+		args.run_mode = "disabled"
 
-    main(args)
+	if not args.model and not args.weights:
+		raise RuntimeError("Cannot finetune a model without initial weights.")
+
+	main(args)
