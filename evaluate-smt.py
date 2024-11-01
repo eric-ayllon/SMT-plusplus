@@ -167,10 +167,11 @@ def evaluateSMTPP(model, dataset, w2i, i2w, logger: WandbLogger, device = torch.
 	logger.experiment.define_metric("total SER")
 
 	# logger.define_metric("logits", step_metric="sample") # logits
-	logger.experiment.define_metric("confidences", step_metric="sample") # framewise confidences
-	logger.experiment.define_metric("prediction", step_metric="sample") # decoded prediction
-	logger.experiment.define_metric("target", step_metric="sample") # target
-	logger.experiment.define_metric("edit distance", step_metric="sample") # sample edit distance
+	logger.experiment.define_metric("confidences", step_metric="sample", summary="none") # framewise confidences
+	logger.experiment.define_metric("prediction", step_metric="sample", summary="none") # decoded prediction
+	logger.experiment.define_metric("target", step_metric="sample", summary="none") # target
+	logger.experiment.define_metric("edit distance", step_metric="sample", summary="none") # sample edit distance
+	logger.experiment.define_metric("length", step_metric="sample", summary="none") # sample edit distance
 
 	totalDistance: int = 0
 	totalLength: int = 0
