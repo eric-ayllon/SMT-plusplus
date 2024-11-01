@@ -38,8 +38,8 @@ def getData(args: Namespace):
 	train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
 	val_dataset = dataset.select((i for i in range(len(dataset)) if i not in dataConfig["samples_to_use"]))
 
-	print("Number of training samples:", len(train_dataset))
-	print("Number of validation samples:", len(val_dataset))
+	# print("Number of training samples:", len(train_dataset))
+	# print("Number of validation samples:", len(val_dataset))
 
 	# Get vocabulary
 	vocab_name: str = args.dataset_name.replace("-", " ").title().replace(" ", "_")
@@ -49,7 +49,7 @@ def getData(args: Namespace):
 	dataset = HuggingfaceDataset(
 								train_dataset, val_dataset, val_dataset, w2i, i2w,
 								batch_size=1,
-								num_workers=20,
+								num_workers=1, # 20
 								tokenization_mode="bekern",
 								reduce_ratio=1.0
 								)
@@ -89,7 +89,14 @@ def main(args: Namespace):
 
 	early_stopping = EarlyStopping(monitor="val_SER", mode="min", verbose=True, min_delta=0.01, patience=5)
 
-	trainer = getTrainer(args.max_epochs, logger, [checkpointer, early_stopping], check_val_every_n_epoch=3500, precision='16-mixed')
+	trainer = getTrainer(
+				args.max_epochs,
+					logger,
+					[checkpointer, early_stopping],
+					# check_val_every_n_epoch=3500,
+					check_val_every_n_epoch=1000,
+					precision='16-mixed'
+					)
 
 	model_wrapper = getModelWrapper(args)
 
