@@ -1,4 +1,4 @@
-from typing import Union, Sequence, Optional, Dict, Tuple, List
+from typing import Sequence, Optional, Dict, Tuple, List
 from torch import Tensor
 
 from smt_model.modeling_smt import SMTModelForCausalLM
@@ -11,12 +11,10 @@ from torch import\
 				int as torchint,\
 				zeros
 
-from wandb.sdk.wandb_run import Run
-from wandb.sdk.lib import RunDisabled
+from wandb.util import generate_id as new_wandb_id
 
 import numpy as np
 import torch
-import wandb
 import yaml
 
 from torchvision import transforms
