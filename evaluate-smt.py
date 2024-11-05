@@ -140,7 +140,7 @@ def getData(args: Namespace):
 	dataset = concatenate_datasets([ds["train"], ds["val"], ds["test"]])
 
 	# Separate selected samples for training and the rest for validation
-	# train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
+	train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
 	val_dataset = dataset.select((i for i in range(len(dataset)) if i not in dataConfig["samples_to_use"]))
 
 	# print("Number of training samples:", len(train_dataset))
@@ -151,14 +151,22 @@ def getData(args: Namespace):
 	w2i = np.load(f"./vocab/{vocab_name}_BeKernw2i.npy", allow_pickle=True).item()
 	i2w = np.load(f"./vocab/{vocab_name}_BeKerni2w.npy", allow_pickle=True).item()
 
-	return val_dataset, w2i, i2w
+	dataset = HuggingfaceDataset(
+								train_dataset, val_dataset, val_dataset, w2i, i2w,
+								batch_size=1,
+								num_workers=0, # 20
+								tokenization_mode="bekern",
+								reduce_ratio=1.0
+								)
+
+	return dataset
 
 def getLogger(args: Namespace) -> WandbLogger:
 	logger_args = {k[6:]: v for k, v in vars(args).items() if "wandb" in k}
 
 	return WandbLogger(**logger_args)
 
-def evaluateSMTPP(model, dataset, w2i, i2w, logger: WandbLogger, device = torch.device("cpu")):
+def evaluateSMTPP(model: SMTPP_Trainer, dataset, w2i, i2w, logger: WandbLogger, device = torch.device("cpu")):
 	model.eval()
 
 	# logger.experiment.summary
@@ -222,9 +230,10 @@ def main(args: Namespace):
 
 	dataset, w2i, i2w = getData(args)
 
-	model = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
+	trainer = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
+	trainer.logger = logger
 
-	evaluateSMTPP(model, dataset, w2i, i2w, logger, args.device)
+	trainer.test(dataset.test_dataloader())
 
 if __name__ == "__main__":
 	parser = ArgumentParser(

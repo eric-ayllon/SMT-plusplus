@@ -101,9 +101,73 @@ class SMTPP_Trainer(L.LightningModule):
         
         return ser
     
+    def on_test_epoch_start(self) -> None:
+        # logger.experiment.summary
+        self.logger.experiment.define_metric("total edit distance")
+        self.logger.experiment.define_metric("total length")
+        self.logger.experiment.define_metric("total SER")
+
+        # logger.define_metric("logits", step_metric="sample") # logits
+        self.logger.experiment.define_metric("confidences", step_metric="sample", summary="none") # framewise confidences
+        self.logger.experiment.define_metric("prediction", step_metric="sample", summary="none") # decoded prediction
+        self.logger.experiment.define_metric("target", step_metric="sample", summary="none") # target
+        self.logger.experiment.define_metric("edit distance", step_metric="sample", summary="none") # sample edit distance
+        self.logger.experiment.define_metric("length", step_metric="sample", summary="none") # sample edit distance
+
+        self.test_sample_id: int = 0
+    
     # def test_step(self, test_batch) -> torch.Tensor | torch.Dict[str, torch.Any] | None:
     def test_step(self, test_batch):
-        return self.validation_step(test_batch)
+        x, dec_in, y = test_batch
+        predicted_sequence, _, logits = self.model.predict(input=x)
+        
+        dec = "".join(predicted_sequence)
+        dec = dec.replace("<t>", "\t")
+        dec = dec.replace("<b>", "\n")
+        dec = dec.replace("<s>", " ")
+
+        gt = "".join([self.model.i2w[token.item()] for token in y.squeeze(0)[:-1]])
+        gt = gt.replace("<t>", "\t")
+        gt = gt.replace("<b>", "\n")
+        gt = gt.replace("<s>", " ")
+
+        self.preds.append(dec)
+        self.grtrs.append(gt)
+
+        _, ser, _ = compute_poliphony_metrics([dec], [gt])
+
+        confidences = logits.softmax(dim=-1).max(dim=-1)[0].tolist()
+
+        prediction = parse_krn_content(dec, ler_parsing=False, cer_parsing=False)
+        target = parse_krn_content(gt, ler_parsing=False, cer_parsing=False)
+
+        self.logger.log_metrics({
+                    "sample": self.test_sample_id,
+                    "confidences": confidences,
+                    "prediction": prediction,
+                    "target": target,
+                    "edit distance": int(ser*length),
+                    "length": len(target),
+                    })
+
+        self.test_sample_id += 1
     
     def on_test_epoch_end(self) -> None:
-        return self.on_validation_epoch_end("test")
+        cer, ser, ler = compute_poliphony_metrics(self.preds, self.grtrs)
+        
+        random_index = random.randint(0, len(self.preds)-1)
+        predtoshow = self.preds[random_index]
+        gttoshow = self.grtrs[random_index]
+        print(f"[Prediction] - {predtoshow}")
+        print(f"[GT] - {gttoshow}")
+        
+        self.log(f'{metric_name}_CER', cer, on_epoch=True, prog_bar=True)
+        self.log(f'{metric_name}_SER', ser, on_epoch=True, prog_bar=True)
+        self.log(f'{metric_name}_LER', ler, on_epoch=True, prog_bar=True)
+        
+        self.preds = []
+        self.grtrs = []
+
+        del self.test_sample_id
+
+        return ser
