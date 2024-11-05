@@ -94,13 +94,14 @@ def main(args: Namespace):
 					logger,
 					[checkpointer, early_stopping],
 					# check_val_every_n_epoch=3500,
-					check_val_every_n_epoch=1000,
+					check_val_every_n_epoch=args.eval_every,
 					precision='16-mixed'
 					)
 
 	model_wrapper = getModelWrapper(args)
 
 	trainer.fit(model_wrapper, datamodule=data)
+	trainer.test(model_wrapper, data)
 
 if __name__ == "__main__":
 	parser = ArgumentParser(
@@ -121,6 +122,7 @@ if __name__ == "__main__":
 
 	# Training
 	parser.add_argument("--max-epochs", action="store", type=int, default=100000)
+	parser.add_argument("--eval-every", action="store", type=int, default=500)
 	parser.add_argument("--checkpointer-path", action="store", type=str, default="weights/finetuning")
 
 	# Logging
