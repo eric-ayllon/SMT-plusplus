@@ -22,6 +22,8 @@ from datasets import load_dataset, concatenate_datasets
 
 from lightning.pytorch.loggers import WandbLogger
 
+from dataModules import HuggingfaceDataset
+
 def levenshtein(s1: Sequence, s2: Sequence, i2t: Optional[Dict[int, str]] = None) -> Tuple[int, Tensor]:
 	# Storage initialization
 	storage: List[List[int]] = [[0 for _ in range(len(s2)+1)] for _ in range(len(s1)+1)]
@@ -228,10 +230,9 @@ def evaluateSMTPP(model: SMTPP_Trainer, dataset, w2i, i2w, logger: WandbLogger, 
 def main(args: Namespace):
 	logger = getLogger(args)
 
-	dataset, w2i, i2w = getData(args)
+	dataset = getData(args)
 
-	trainer = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt").model.to(args.device)
-	trainer.logger = logger
+	trainer = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt", logger=logger)
 
 	trainer.test(dataset.test_dataloader())
 

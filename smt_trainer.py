@@ -171,3 +171,9 @@ class SMTPP_Trainer(L.LightningModule):
         del self.test_sample_id
 
         return ser
+
+    def test(self, dataloader):
+        self.on_test_epoch_start()
+        for b in dataloader:
+            self.test_step(b)
+        self.on_test_epoch_end()
