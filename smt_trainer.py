@@ -161,9 +161,9 @@ class SMTPP_Trainer(L.LightningModule):
         print(f"[Prediction] - {predtoshow}")
         print(f"[GT] - {gttoshow}")
         
-        self.log(f'{metric_name}_CER', cer, on_epoch=True, prog_bar=True)
-        self.log(f'{metric_name}_SER', ser, on_epoch=True, prog_bar=True)
-        self.log(f'{metric_name}_LER', ler, on_epoch=True, prog_bar=True)
+        self.log(f'total CER', cer, on_epoch=True, prog_bar=True)
+        self.log(f'total SER', ser, on_epoch=True, prog_bar=True)
+        self.log(f'total LER', ler, on_epoch=True, prog_bar=True)
         
         self.preds = []
         self.grtrs = []
@@ -171,9 +171,3 @@ class SMTPP_Trainer(L.LightningModule):
         del self.test_sample_id
 
         return ser
-
-    def test(self, dataloader):
-        self.on_test_epoch_start()
-        for b in dataloader:
-            self.test_step(b)
-        self.on_test_epoch_end()
