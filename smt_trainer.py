@@ -68,7 +68,7 @@ class SMTPP_Trainer(L.LightningModule):
     
     def validation_step(self, val_batch):
         x, dec_in, y = val_batch
-        predicted_sequence, _ = self.model.predict(input=x)
+        predicted_sequence, _, _ = self.model.predict(input=x)
         
         dec = "".join(predicted_sequence)
         dec = dec.replace("<t>", "\t")
