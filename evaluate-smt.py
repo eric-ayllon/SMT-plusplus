@@ -21,6 +21,7 @@ from torchvision import transforms
 from datasets import load_dataset, concatenate_datasets
 
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch import Trainer
 
 from dataModules import HuggingfaceDataset
 
@@ -227,14 +228,23 @@ def evaluateSMTPP(model: SMTPP_Trainer, dataset, w2i, i2w, logger: WandbLogger, 
 	logger.experiment.summary["total length"] = totalLength
 	logger.experiment.summary["total SER"] = 100.0*totalDistance/totalLength
 
+def getTrainer(logger, callbacks, **kwargs):
+	trainer_args = dict()
+
+	for k, v in kwargs.items():
+		trainer_args[k] = v
+
+	return Trainer(logger=logger, **trainer_args)
+
 def main(args: Namespace):
 	logger = getLogger(args)
 
 	dataset = getData(args)
 
-	trainer = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt", logger=logger)
+	trainer = getTrainer(logger, [])
+	smt_trainer = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt")
 
-	trainer.test(dataset.test_dataloader())
+	trainer.test(smt_trainer, dataset.test_dataloader())
 
 if __name__ == "__main__":
 	parser = ArgumentParser(
