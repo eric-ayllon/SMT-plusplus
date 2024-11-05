@@ -6,7 +6,7 @@ import torch.nn as nn
 import lightning.pytorch as L
 
 from torchinfo import summary
-from eval_functions import compute_poliphony_metrics
+from eval_functions import compute_poliphony_metrics, parse_krn_content
 from smt_model.configuration_smt import SMTConfig
 from smt_model.modeling_smt import SMTModelForCausalLM
 
@@ -146,7 +146,7 @@ class SMTPP_Trainer(L.LightningModule):
                     "confidences": confidences,
                     "prediction": prediction,
                     "target": target,
-                    "edit distance": int(ser*length),
+                    "edit distance": int(ser*len(target)),
                     "length": len(target),
                     })
 
