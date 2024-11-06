@@ -242,7 +242,7 @@ def main(args: Namespace):
 	dataset = getData(args)
 
 	trainer = getTrainer(logger, [])
-	smt_trainer = SMTPP_Trainer.load_from_checkpoint("./weights/SMTPP_Mozarteum_Synthetic.ckpt")
+	smt_trainer = SMTPP_Trainer.load_from_checkpoint(args.weights)
 
 	trainer.test(smt_trainer, dataset.test_dataloader())
 
