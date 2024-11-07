@@ -101,6 +101,7 @@ def main(args: Namespace):
 	model_wrapper = getModelWrapper(args)
 
 	trainer.fit(model_wrapper, datamodule=data)
+	model_wrapper = SMTPP_Trainer.load_from_checkpoint(args.weights) # Retrieve best weights
 	trainer.test(model_wrapper, data)
 
 if __name__ == "__main__":
