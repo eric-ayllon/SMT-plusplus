@@ -85,6 +85,7 @@ def main(args: Namespace):
 	logger = getLogger(args)
 
 	checkpointer_file = f"{args.dataset_config}{fold_str}"
+	output_file = args.checkpointer_path+"/"+checkpointer_file+".ckpt"
 	checkpointer = ModelCheckpoint(monitor="val_SER", mode='min', verbose=True, save_top_k=1, filename=checkpointer_file, dirpath=args.checkpointer_path)
 
 	early_stopping = EarlyStopping(monitor="val_SER", mode="min", verbose=True, min_delta=0.01, patience=5)
@@ -101,7 +102,7 @@ def main(args: Namespace):
 	model_wrapper = getModelWrapper(args)
 
 	trainer.fit(model_wrapper, datamodule=data)
-	model_wrapper = SMTPP_Trainer.load_from_checkpoint(args.weights) # Retrieve best weights
+	model_wrapper = SMTPP_Trainer.load_from_checkpoint(output_file) # Retrieve best weights
 	trainer.test(model_wrapper, data)
 
 if __name__ == "__main__":
