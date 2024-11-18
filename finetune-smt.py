@@ -16,6 +16,8 @@ from lightning.pytorch import Trainer
 # Huggingface
 from datasets import load_dataset, concatenate_datasets
 
+from peft import LoraConfig, get_peft_model
+
 # Others
 from smt_trainer import SMTPP_Trainer
 from smt_model.modeling_smt import SMTModelForCausalLM
@@ -73,7 +75,13 @@ def getModelWrapper(args: Namespace):
 	if args.weights:
 		return SMTPP_Trainer.load_from_checkpoint(args.weights)
 
-	return SMTModelForCausalLM.from_pretrained(args.model)
+	model = SMTModelForCausalLM.from_pretrained(args.model)
+	peft_config = LoraConfig(inference_mode=False, r=8, lora_alpha=32, lora_dropout=.1, target_modules=["lq", "lk", "lv", "out_proj", "dwconv", "pwconv1", "pwconv2"])
+	model = get_peft_model(model, peft_config)
+
+	return model
+
+# TODO: Install PEFT
 
 def main(args: Namespace):
 	fold_str: str = ""
