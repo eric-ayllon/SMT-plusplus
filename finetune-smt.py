@@ -16,6 +16,7 @@ from lightning.pytorch import Trainer
 # Huggingface
 from datasets import load_dataset, concatenate_datasets
 
+# PEFT
 from peft import LoraConfig, get_peft_model
 
 # Others
@@ -73,13 +74,15 @@ def getTrainer(max_epochs, logger, callbacks, **kwargs):
 
 def getModelWrapper(args: Namespace):
 	if args.weights:
-		return SMTPP_Trainer.load_from_checkpoint(args.weights)
+		model = SMTModelForCausalLM.from_pretrained(args.model)
 
-	model = SMTModelForCausalLM.from_pretrained(args.model)
-	peft_config = LoraConfig(inference_mode=False, r=8, lora_alpha=32, lora_dropout=.1, target_modules=["lq", "lk", "lv", "out_proj", "dwconv", "pwconv1", "pwconv2"])
-	model = get_peft_model(model, peft_config)
+		if args.lora:
+			peft_config = LoraConfig(inference_mode=False, r=8, lora_alpha=32, lora_dropout=.1, target_modules=["lq", "lk", "lv", "out_proj", "dwconv", "pwconv1", "pwconv2"])
+			model.model = get_peft_model(model.model, peft_config)
 
-	return model
+		return model
+
+	return SMTModelForCausalLM.from_pretrained(args.model)
 
 # TODO: Install PEFT
 
@@ -134,6 +137,7 @@ if __name__ == "__main__":
 	parser.add_argument("--max-epochs", action="store", type=int, default=100000)
 	parser.add_argument("--eval-every", action="store", type=int, default=500)
 	parser.add_argument("--checkpointer-path", action="store", type=str, default="weights/finetuning")
+	parser.add_argument('--lora', action=BooleanOptionalAction, default=False, type=bool)
 
 	# Logging
 	parser.add_argument('--log', action=BooleanOptionalAction, default=True, type=bool)
