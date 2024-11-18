@@ -84,8 +84,6 @@ def getModelWrapper(args: Namespace):
 
 	return SMTModelForCausalLM.from_pretrained(args.model)
 
-# TODO: Install PEFT
-
 def main(args: Namespace):
 	fold_str: str = ""
 
