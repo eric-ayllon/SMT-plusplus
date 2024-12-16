@@ -74,15 +74,21 @@ def getTrainer(max_epochs, logger, callbacks, **kwargs):
 
 def getModelWrapper(args: Namespace):
 	if args.weights:
-		model = SMTModelForCausalLM.from_pretrained(args.model)
+		model = SMTPP_Trainer.load_from_checkpoint(args.weights)
 
 		if args.lora:
+			raise RuntimeError("Cannot use LoRA with any class other than PretrainedModel (wtf)")
 			peft_config = LoraConfig(inference_mode=False, r=8, lora_alpha=32, lora_dropout=.1, target_modules=["lq", "lk", "lv", "out_proj", "dwconv", "pwconv1", "pwconv2"])
 			model.model = get_peft_model(model.model, peft_config)
 
 		return model
 
-	return SMTModelForCausalLM.from_pretrained(args.model)
+	model = SMTModelForCausalLM.from_pretrained(args.model)
+	if args.lora:
+		peft_config = LoraConfig(inference_mode=False, r=8, lora_alpha=32, lora_dropout=.1, target_modules=["lq", "lk", "lv", "out_proj", "dwconv", "pwconv1", "pwconv2"])
+		model.model = get_peft_model(model.model, peft_config)
+
+	return model
 
 def main(args: Namespace):
 	fold_str: str = ""
