@@ -310,13 +310,13 @@ class FinetuningDataset(LightningDataModule):
         return torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers, collate_fn=batch_preparation_img2seq)
 
 class SyntheticCLDataset(OMRIMG2SEQDataset):
-    def __init__(self, data_path, base_folder, teacher_forcing_perc=0.2, reduce_ratio=1.0, 
+    def __init__(self, teacher_forcing_perc=0.2, reduce_ratio=1.0, 
                 augment=False, tokenization_mode="standard") -> None:
        super().__init__(teacher_forcing_perc, augment)
        self.reduce_ratio = reduce_ratio
        self.tokenization_mode = tokenization_mode
-       self.generator = VerovioGenerator(sources=["Data/GrandStaff/partitions_grandstaff/types/train.txt"], 
-                                         base_folder="Data/GrandStaff/",
+       self.generator = VerovioGenerator(sources="antoniorv6/grandstaff-ekern", 
+                                         split="train",
                                          tokenization_mode=tokenization_mode)
        
        self.max_synth_prob = 0.9
@@ -364,20 +364,19 @@ class SyntheticCLDataset(OMRIMG2SEQDataset):
         return x, decoder_input, y
 
     def __len__(self):
-       return 80000
+       return 40000
 
 class SynthFinetuningDataset(LightningDataModule):
     def __init__(self, config:ExperimentConfig, fold=0) -> None:
         super().__init__()
-        self.data_path = config.data.data_path + f"fold_{fold}/"
-        self.base_folder = config.data.base_folder
+        self.data_path = config.data.data_path
         self.vocab_name = config.data.vocab_name
         self.batch_size = config.data.batch_size
         self.num_workers = config.data.num_workers
         self.tokenization_mode = config.data.tokenization_mode
-        self.train_dataset = SyntheticCLDataset(data_path=f"{self.data_path}/train.txt", base_folder=self.base_folder, augment=True, tokenization_mode=self.tokenization_mode, reduce_ratio=config.data.reduce_ratio)
-        self.val_dataset = RealDataset(data_path=f"{self.data_path}/val.txt", base_folder=self.base_folder, augment=False, tokenization_mode=self.tokenization_mode, reduce_ratio=config.data.reduce_ratio)
-        self.test_dataset = RealDataset(data_path=f"{self.data_path}/test.txt", base_folder=self.base_folder, augment=False, tokenization_mode=self.tokenization_mode, reduce_ratio=config.data.reduce_ratio)
+        self.train_dataset = SyntheticCLDataset(augment=True, tokenization_mode=self.tokenization_mode, reduce_ratio=config.data.reduce_ratio)
+        self.val_dataset = RealDataset(data_path=self.data_path, split="val", augment=False, tokenization_mode=self.tokenization_mode, reduce_ratio=config.data.reduce_ratio)
+        self.test_dataset = RealDataset(data_path=self.data_path, split="test", augment=False, tokenization_mode=self.tokenization_mode, reduce_ratio=config.data.reduce_ratio)
         w2i, i2w = check_and_retrieveVocabulary([self.train_dataset.get_gt(), self.val_dataset.get_gt(), self.test_dataset.get_gt()], "vocab/", f"{self.vocab_name}")#
     
         self.train_dataset.set_dictionaries(w2i, i2w)
