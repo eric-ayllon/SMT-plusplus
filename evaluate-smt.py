@@ -136,7 +136,7 @@ def decode_transcription(transcription, i2w):
 def getData(args: Namespace):
 	dataConfig: dict
 	with open(args.dataset_config_path+args.dataset_config+".yaml", "r") as dataConfigFile:
-		dataConfig = yaml.safe_load(dataConfigFile)["dataset"]
+		dataConfig = yaml.safe_load(dataConfigFile)
 
 	# load dataset using Huggingface
 	ds = load_dataset(dataConfig["root"]+args.dataset_name)
