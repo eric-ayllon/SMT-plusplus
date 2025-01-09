@@ -128,7 +128,7 @@ if __name__ == "__main__":
 											)
 
 	# Data
-	parser.add_argument("--dataset-name", action="store", default="mozarteum", type=str) # Default to mozarteum
+	parser.add_argument("--dataset-name", action="store", type=str, choices=["mozarteum", "polish-scores"], default="mozarteum") # Default to mozarteum
 	parser.add_argument("--dataset-config-path", action="store", type=str, default="config/datasets/")
 	parser.add_argument("--dataset-config", action="store", type=str)
 
