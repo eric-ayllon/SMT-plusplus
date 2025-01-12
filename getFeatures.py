@@ -173,23 +173,19 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDatas
 		max_width = max(max_width, x.shape[3])
 		encoder_output = model.model.forward_encoder(x)
 
-		print(x.shape, encoder_output.shape)
+		# print(x.shape, encoder_output.shape)
 
-	print("Max channels:", max_channels)
-	print("Max height:", max_height)
-	print("Max width:", max_width)
+	# print("Max channels:", max_channels)
+	# print("Max height:", max_height)
+	# print("Max width:", max_width)
 
 	if args.features == "encoder":
 		encoder_output = model.model.forward_encoder(next(dataset.val_dataloader())[0])
-		print(encoder_output.shape)
-		exit()
-		features = torch.zeros((num_samples, encoder_output.shape))
+		features = torch.zeros((num_samples, *encoder_output.shape[1:]))
 	else:
 		raise NotImplementedError("Cannot perform clustering with logits of an autoregressive model")
 
-	exit()
-
-	features = torch.zeros((num_samples, max_channels, max_height, max_width))
+	print("Could reserve space for the features without exploding")
 
 	for batch in dataset.test_dataloader():
 		x, _, _ = batch
@@ -199,19 +195,14 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDatas
 		if args.features == "encoder":
 			encoder_output = model.model.forward_encoder(X)
 			features[sample_idx:sample_idx+1] = encoder_output
-			print(encoder_output.shape)
-			exit()
-			features = torch.zeros((num_samples, encoder_output.shape))
 		else:
 			raise NotImplementedError("Cannot perform clustering with logits of an autoregressive model")
-
-		_, _, logits = model.model.predict(X)
-		features[sample_idx:sample_idx+1] = model.forward_encoder(X)
 
 		sample_idx += 1
 
 	features_file_name = f"{args.test_datasets[0]['class']}-{args.features}.npy"
 	np.save(f"{args.output_dir}/{features_file_name}", features.flatten(1).numpy())
+	print("Successfully saved the features.")
 
 def mergeFeatures(args: Namespace):
 	pass
