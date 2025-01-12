@@ -159,6 +159,7 @@ def getData(args: Namespace):
 
 	return dataset
 
+@torch.no_grad()
 def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDataset):
 	sample_idx: int = 0
 
@@ -180,7 +181,7 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDatas
 	# print("Max width:", max_width)
 
 	if args.features == "encoder":
-		encoder_output = model.model.forward_encoder(next(dataset.val_dataloader())[0])
+		encoder_output = model.model.forward_encoder(next(iter(dataset.val_dataloader()))[0])
 		features = torch.zeros((num_samples, *encoder_output.shape[1:]))
 	else:
 		raise NotImplementedError("Cannot perform clustering with logits of an autoregressive model")
@@ -200,7 +201,7 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDatas
 
 		sample_idx += 1
 
-	features_file_name = f"{args.test_datasets[0]['class']}-{args.features}.npy"
+	features_file_name = f"{args.dataset_name}-{args.features}.npy"
 	np.save(f"{args.output_dir}/{features_file_name}", features.flatten(1).numpy())
 	print("Successfully saved the features.")
 
