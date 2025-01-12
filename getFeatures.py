@@ -171,15 +171,16 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDatas
 		max_channels = max(max_channels, x.shape[1])
 		max_height = max(max_height, x.shape[2])
 		max_width = max(max_width, x.shape[3])
+		encoder_output = model.model.forward_encoder(x)
 
-		print(x.shape)
+		print(x.shape, encoder_output.shape)
 
 	print("Max channels:", max_channels)
 	print("Max height:", max_height)
 	print("Max width:", max_width)
 
 	if args.features == "encoder":
-		encoder_output = model.model.encoder_output(next(dataset.val_dataloader())[0])
+		encoder_output = model.model.forward_encoder(next(dataset.val_dataloader())[0])
 		print(encoder_output.shape)
 		exit()
 		features = torch.zeros((num_samples, encoder_output.shape))
