@@ -119,7 +119,6 @@ class SMTPP_Trainer(L.LightningModule):
     # def test_step(self, test_batch) -> torch.Tensor | torch.Dict[str, torch.Any] | None:
     def test_step(self, test_batch, batch_idx: int, dataloader_idx: int = 0):
         x, dec_in, y, info = test_batch
-        print(info)
         predicted_sequence, _, logits = self.model.predict(input=x)
 
         split = info[0]["split"]
