@@ -35,11 +35,13 @@ def getData(args: Namespace):
 
 	# load dataset using Huggingface
 	ds = load_dataset(dataConfig["root"]+args.dataset_name)
-	dataset = concatenate_datasets([ds["train"], ds["val"], ds["test"]])
+
+	training_dataset = concatenate_datasets([ds["train"], ds["val"]])
+	test_dataset = concatenate_datasets([ds["test"]])
 
 	# Separate selected samples for training and the rest for validation
-	train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
-	val_dataset = dataset.select((i for i in range(len(dataset)) if i not in dataConfig["samples_to_use"]))
+	train_dataset = training_dataset.select((i for i in dataConfig["samples_to_use"]))
+	val_dataset = training_dataset.select((i for i in range(len(training_dataset)) if i not in dataConfig["samples_to_use"]))
 
 	# print("Number of training samples:", len(train_dataset))
 	# print("Number of validation samples:", len(val_dataset))
@@ -50,7 +52,7 @@ def getData(args: Namespace):
 	i2w = np.load(f"./vocab/{vocab_name}_BeKerni2w.npy", allow_pickle=True).item()
 
 	dataset = HuggingfaceDataset(
-								train_dataset, val_dataset, val_dataset, w2i, i2w,
+								train_dataset, {"validation": val_dataset}, {"validation": val_dataset, "test": test_dataset}, w2i, i2w,
 								batch_size=1,
 								num_workers=0, # 20
 								tokenization_mode="bekern",
