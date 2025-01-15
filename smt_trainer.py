@@ -40,7 +40,7 @@ class SMTPP_Trainer(L.LightningModule):
     def forward(self, input, last_preds):
         return self.model(input, last_preds)
     
-    def training_step(self, batch):
+	def training_step(self, batch, batch_idx: int):
         x, di, y, _ = batch
         outputs = self.model(x, di[:, :-1], labels=y)
         loss = outputs.loss
@@ -66,7 +66,7 @@ class SMTPP_Trainer(L.LightningModule):
         self.best_image = None
         
     
-    def validation_step(self, val_batch):
+    def validation_step(self, val_batch, batch_idx: int, dataloader_idx: int = 0):
         x, dec_in, y, _ = val_batch
         predicted_sequence, _, _ = self.model.predict(input=x)
         
@@ -117,7 +117,7 @@ class SMTPP_Trainer(L.LightningModule):
         self.test_sample_id: int = 0
     
     # def test_step(self, test_batch) -> torch.Tensor | torch.Dict[str, torch.Any] | None:
-    def test_step(self, test_batch):
+    def test_step(self, test_batch, batch_idx: int, dataloader_idx: int = 0):
         x, dec_in, y, info = test_batch
         print(info)
         predicted_sequence, _, logits = self.model.predict(input=x)
