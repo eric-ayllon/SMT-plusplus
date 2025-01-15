@@ -40,7 +40,7 @@ class SMTPP_Trainer(L.LightningModule):
     def forward(self, input, last_preds):
         return self.model(input, last_preds)
     
-	def training_step(self, batch, batch_idx: int):
+    def training_step(self, batch, batch_idx: int):
         x, di, y, _ = batch
         outputs = self.model(x, di[:, :-1], labels=y)
         loss = outputs.loss
