@@ -52,9 +52,9 @@ def getData(args: Namespace):
 	dataset = HuggingfaceDataset(
 								train_dataset, val_dataset, val_dataset, w2i, i2w,
 								batch_size=1,
-								num_workers=0, # 20
+								num_workers=1, # 20
 								tokenization_mode="bekern",
-								reduce_ratio=1.0
+								reduce_ratio=dataConfig["reduce_ratio"]
 								)
 
 	return dataset

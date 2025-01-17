@@ -373,14 +373,17 @@ class SMTModelForCausalLM(PreTrainedModel):
         features = torch.flatten(encoder_output, start_dim=2, end_dim=3).permute(2,0,1)
         enhanced_features = features
         enhanced_features = torch.flatten(pos_features, start_dim=2, end_dim=3).permute(2,0,1)
-        output, predictions, _, _, weights = self.decoder(features, enhanced_features, y_pred[:, :], reduced_size, 
+        # output, predictions, _, _, weights = self.decoder(features, enhanced_features, y_pred[:, :], reduced_size, 
+                                                           # [max(ylens) for _ in range(b)], encoder_output.size(), 
+                                                           # cache=None, keep_all_weights=True)
+        output, predictions, _, _, _ = self.decoder(features, enhanced_features, y_pred[:, :], reduced_size, 
                                                            [max(ylens) for _ in range(b)], encoder_output.size(), 
-                                                           cache=None, keep_all_weights=True)
+                                                           cache=None, keep_all_weights=False)
         return SMTOutput(
             logits=predictions,
             hidden_states=output,
-            attentions=weights["self"],
-            cross_attentions=weights["mix"]
+            # attentions=weights["self"],
+            # cross_attentions=weights["mix"]
         )
 
     def forward(self, x, y_pred, labels=None):
@@ -401,15 +404,22 @@ class SMTModelForCausalLM(PreTrainedModel):
 
         predictions: Optional[SMTOutput] = None
 
-        logit_sequence = torch.zeros((1, self.decoder.out_layer.out_channels))
+        logit_sequence = torch.zeros((1, self.decoder.out_layer.out_channels), requires_grad=False).cpu()
         logit_sequence[:, self.w2i["<bos>"]] = 100
 
-        for i in range(self.maxlen - predicted_sequence.shape[-1]):
+        for i in range(3000):
             predictions = self.forward_decoder(encoder_output, predicted_sequence.long())
-            predicted_token = torch.argmax(predictions.logits[:, :, -1]).item()
+            predicted_token = torch.argmax(predictions.logits[:, :, -1]).cpu().item()
+            # print(predicted_sequence.shape, torch.argmax(predictions.logits[:, :, -1].detach(), dim=1, keepdim=True).shape, torch.cat([predicted_sequence, torch.argmax(predictions.logits[:, :, -1].detach(), dim=1, keepdim=True)], dim=1).shape)
             predicted_sequence = torch.cat([predicted_sequence, torch.argmax(predictions.logits[:, :, -1], dim=1, keepdim=True)], dim=1)
 
-            logit_sequence = torch.cat([logit_sequence, predictions.logits[:, :, -1].detach().cpu()], dim=1)
+            # print(logit_sequence.shape, end=" ")
+            # print(predictions.logits[:, :, -1].softmax(dim=-1).max(dim=-1)[0].shape, end=" "),
+            # print(torch.cat([logit_sequence, predictions.logits[:, :, -1].detach().cpu()], dim=0).shape)
+            logit_sequence = torch.cat([
+                                        logit_sequence,
+                                        predictions.logits[:, :, -1].detach().cpu()
+                                        ], dim=0).cpu()
 
             if convert_to_str:
                 predicted_token = f"{predicted_token}"
@@ -417,4 +427,4 @@ class SMTModelForCausalLM(PreTrainedModel):
                 break
             text_sequence.append(self.i2w[predicted_token])
         
-        return text_sequence, predictions, logit_sequence.detach()
+        return text_sequence, predictions, logit_sequence
