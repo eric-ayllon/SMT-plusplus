@@ -6,12 +6,10 @@ from smt_trainer import SMTPP_Trainer
 from data import parse_kern_file
 from torch.cuda import is_available as cuda_enabled
 
-from argparse import ArgumentParser, Namespace, BooleanOptionalAction
+from argparse import ArgumentParser, Namespace
 from torch import\
 				int as torchint,\
 				zeros
-
-from wandb.util import generate_id as new_wandb_id
 
 import numpy as np
 import torch
@@ -19,9 +17,6 @@ import yaml
 
 from torchvision import transforms
 from datasets import load_dataset, concatenate_datasets
-
-from lightning.pytorch.loggers import WandbLogger
-from lightning.pytorch import Trainer
 
 from dataModules import HuggingfaceDataset
 
@@ -140,13 +135,11 @@ def getData(args: Namespace):
 
 	# load dataset using Huggingface
 	ds = load_dataset(dataConfig["root"]+args.dataset_name)
-
-	training_dataset = concatenate_datasets([ds["train"], ds["val"]])
-	test_dataset = concatenate_datasets([ds["test"]])
+	dataset = concatenate_datasets([ds["train"], ds["val"], ds["test"]])
 
 	# Separate selected samples for training and the rest for validation
-	train_dataset = training_dataset.select((i for i in dataConfig["samples_to_use"]))
-	val_dataset = training_dataset.select((i for i in range(len(training_dataset)) if i not in dataConfig["samples_to_use"]))
+	train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
+	val_dataset = dataset.select((i for i in range(len(dataset)) if i not in dataConfig["samples_to_use"]))
 
 	# print("Number of training samples:", len(train_dataset))
 	# print("Number of validation samples:", len(val_dataset))
@@ -157,7 +150,7 @@ def getData(args: Namespace):
 	i2w = np.load(f"./vocab/{vocab_name}_BeKerni2w.npy", allow_pickle=True).item()
 
 	dataset = HuggingfaceDataset(
-								train_dataset, {"validation": val_dataset}, {"validation": val_dataset, "test": test_dataset}, w2i, i2w,
+								train_dataset, val_dataset, val_dataset, w2i, i2w,
 								batch_size=1,
 								num_workers=0, # 20
 								tokenization_mode="bekern",
@@ -166,87 +159,63 @@ def getData(args: Namespace):
 
 	return dataset
 
-def getLogger(args: Namespace) -> WandbLogger:
-	logger_args = {k[6:]: v for k, v in vars(args).items() if "wandb" in k}
+@torch.no_grad()
+def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDataset):
+	sample_idx: int = 0
 
-	return WandbLogger(**logger_args)
+	num_samples: int = len(dataset.test_dataset)
+	print("Total samples:", num_samples)
+	max_channels: int = 0
+	max_height: int = 0
+	max_width: int = 0
+	for x, _, _ in dataset.val_dataloader():
+		max_channels = max(max_channels, x.shape[1])
+		max_height = max(max_height, x.shape[2])
+		max_width = max(max_width, x.shape[3])
+		encoder_output = model.model.forward_encoder(x)
 
-def evaluateSMTPP(model: SMTPP_Trainer, dataset, w2i, i2w, logger: WandbLogger, device = torch.device("cpu")):
-	model.eval()
+		# print(x.shape, encoder_output.shape)
 
-	# logger.experiment.summary
-	logger.experiment.define_metric("total edit distance")
-	logger.experiment.define_metric("total length")
-	logger.experiment.define_metric("total SER")
+	# print("Max channels:", max_channels)
+	# print("Max height:", max_height)
+	# print("Max width:", max_width)
 
-	# logger.define_metric("logits", step_metric="sample") # logits
-	logger.experiment.define_metric("confidences", step_metric="sample", summary="none") # framewise confidences
-	logger.experiment.define_metric("prediction", step_metric="sample", summary="none") # decoded prediction
-	logger.experiment.define_metric("target", step_metric="sample", summary="none") # target
-	logger.experiment.define_metric("edit distance", step_metric="sample", summary="none") # sample edit distance
-	logger.experiment.define_metric("length", step_metric="sample", summary="none") # sample edit distance
+	if args.features == "encoder":
+		encoder_output = model.model.forward_encoder(next(iter(dataset.val_dataloader()))[0])
+		features = torch.zeros((num_samples, *encoder_output.shape[1:]))
+	else:
+		raise NotImplementedError("Cannot perform clustering with logits of an autoregressive model")
 
-	totalDistance: int = 0
-	totalLength: int = 0
+	print("Could reserve space for the features without exploding")
 
-	for sample_idx, sample in enumerate(dataset):
-		image = sample["image"]
-		# print("Sample size:", image)
-		ground_truth = sample["transcription"]
-		target = tokenize_transcription(ground_truth)
+	for batch in dataset.test_dataloader():
+		x, _, _ = batch
+		X = torch.zeros((x.shape[0], max_channels, max_height, max_width))
+		X[:, :x.shape[1], :x.shape[2], :x.shape[3]] = x
 
-		# print(torch.cuda.mem_get_info(device))
-		image_tensor = convert_img_to_tensor(image).unsqueeze(0).to(device)
-		# print(torch.cuda.mem_get_info(device))
+		if args.features == "encoder":
+			encoder_output = model.model.forward_encoder(X)
+			features[sample_idx:sample_idx+1] = encoder_output
+		else:
+			raise NotImplementedError("Cannot perform clustering with logits of an autoregressive model")
 
-		# predictions, _, logit_sequence = model.predict(image_tensor, convert_to_str=True)
-		predictions, _, logit_sequence = model.predict(image_tensor)
+		sample_idx += 1
 
-		# print("prediction:")
-		# print(predictions)
-		# print("target:")
-		# print(target)
-		# print("ground_truth:")
-		# print(ground_truth)
+	features_file_name = f"{args.dataset_name}-{args.features}.npy"
+	np.save(f"{args.output_dir}/{features_file_name}", features.flatten(1).numpy())
+	print("Successfully saved the features.")
 
-		# Get confidences
-		# logits (1, length, vocabulary) -> probabilities (1, length, vocabulary) -> confidences (1, length)
-		confidences = logit_sequence.softmax(dim=-1).max(dim=-1)[0].tolist()
-
-		distance = levenshtein(predictions, target)[0]
-		totalDistance += distance
-		totalLength += len(target)
-
-		logger.log_metrics({
-					"sample": sample_idx,
-					"confidences": confidences,
-					"prediction": predictions,
-					"target": target,
-					"edit distance": distance,
-					"length": len(target),
-					})
-
-	logger.experiment.summary["total edit distance"] = totalDistance
-	logger.experiment.summary["total length"] = totalLength
-	logger.experiment.summary["total SER"] = 100.0*totalDistance/totalLength
-
-def getTrainer(logger, callbacks, **kwargs):
-	trainer_args = dict()
-
-	for k, v in kwargs.items():
-		trainer_args[k] = v
-
-	return Trainer(logger=logger, **trainer_args)
+def mergeFeatures(args: Namespace):
+	pass
 
 def main(args: Namespace):
-	logger = getLogger(args)
-
 	dataset = getData(args)
 
-	trainer = getTrainer(logger, [])
+	print("Before loading the model")
 	smt_trainer = SMTPP_Trainer.load_from_checkpoint(args.weights)
+	print("After loading the model")
 
-	trainer.test(smt_trainer, dataset.test_dataloader())
+	getFeatures(args, smt_trainer, dataset)
 
 if __name__ == "__main__":
 	parser = ArgumentParser(
@@ -265,18 +234,11 @@ if __name__ == "__main__":
 	parser.add_argument("--weights", action="store", type=str) # Local path to checkpoint file
 	parser.add_argument("--device", action="store", default="cuda" if cuda_enabled() else "cpu", type=str)
 
-	# Logging
-	parser.add_argument('--log', action=BooleanOptionalAction, default=True, type=bool)
-	parser.add_argument("--wandb-project", action="store", default="SMT Active Learning", type=str)
-	parser.add_argument("--wandb-group", action="store", type=str)
-	parser.add_argument("--wandb-name", action="store", type=str)
-	parser.add_argument("--wandb-id", action="store", default=new_wandb_id(), type=str)
-	parser.add_argument("--wandb-offline", action=BooleanOptionalAction, default=False, type=str)
+	# Features
+	parser.add_argument("--features", action="store", type=str, choices=["encoder", "logits"], default="encoder")
+	parser.add_argument("--output-dir", action="store", type=str, default="./features")
 
 	args = parser.parse_args()
-
-	if not args.log:
-		args.run_mode = "disabled"
 
 	if not args.model and not args.weights:
 		raise RuntimeError("Cannot finetune a model without initial weights.")

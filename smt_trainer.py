@@ -40,8 +40,8 @@ class SMTPP_Trainer(L.LightningModule):
     def forward(self, input, last_preds):
         return self.model(input, last_preds)
     
-    def training_step(self, batch):
-        x, di, y, = batch
+    def training_step(self, batch, batch_idx: int):
+        x, di, y, _ = batch
         outputs = self.model(x, di[:, :-1], labels=y)
         loss = outputs.loss
         self.log('loss', loss, on_epoch=True, batch_size=1, prog_bar=True)
@@ -66,8 +66,8 @@ class SMTPP_Trainer(L.LightningModule):
         self.best_image = None
         
     
-    def validation_step(self, val_batch):
-        x, dec_in, y = val_batch
+    def validation_step(self, val_batch, batch_idx: int, dataloader_idx: int = 0):
+        x, dec_in, y, _ = val_batch
         predicted_sequence, _, _ = self.model.predict(input=x)
         
         dec = "".join(predicted_sequence)
@@ -117,9 +117,11 @@ class SMTPP_Trainer(L.LightningModule):
         self.test_sample_id: int = 0
     
     # def test_step(self, test_batch) -> torch.Tensor | torch.Dict[str, torch.Any] | None:
-    def test_step(self, test_batch):
-        x, dec_in, y = test_batch
+    def test_step(self, test_batch, batch_idx: int, dataloader_idx: int = 0):
+        x, dec_in, y, info = test_batch
         predicted_sequence, _, logits = self.model.predict(input=x)
+
+        split = info[0]["split"]
         
         dec = "".join(predicted_sequence)
         dec = dec.replace("<t>", "\t")
@@ -142,6 +144,7 @@ class SMTPP_Trainer(L.LightningModule):
         target = parse_krn_content(gt, ler_parsing=False, cer_parsing=False)
 
         self.logger.log_metrics({
+                    "split": split,
                     "sample": self.test_sample_id,
                     "confidences": confidences,
                     "prediction": prediction,

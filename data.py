@@ -67,6 +67,7 @@ def batch_preparation_img2seq(data):
     images = [sample[0] for sample in data]
     dec_in = [sample[1] for sample in data]
     gt = [sample[2] for sample in data]
+    info = [sample[3] for sample in data]
 
     max_image_width = max([img.shape[2] for img in images])
     max_image_height = max([img.shape[1] for img in images])
@@ -88,7 +89,7 @@ def batch_preparation_img2seq(data):
     for i, seq in enumerate(gt):
         y[i, 0:len(seq)-1] = torch.from_numpy(np.asarray([char for char in seq[1:]]))
     
-    return X_train, decoder_input.long(), y.long()
+    return X_train, decoder_input.long(), y.long(), info
 
 class OMRIMG2SEQDataset(Dataset):
     def __init__(self, teacher_forcing_perc=0.2, augment=False) -> None:
