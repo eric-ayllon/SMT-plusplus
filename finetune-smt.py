@@ -11,7 +11,7 @@ from lightning.pytorch.loggers import WandbLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
 
-from lightning.pytorch import Trainer
+from lightning.pytorch import Trainer, seed_everything
 
 # Huggingface
 from datasets import load_dataset, concatenate_datasets
@@ -153,6 +153,9 @@ if __name__ == "__main__":
 	parser.add_argument("--wandb-id", action="store", default=new_wandb_id(), type=str)
 	parser.add_argument("--wandb-offline", action=BooleanOptionalAction, default=False, type=str)
 
+	# Reproducibility
+	parser.add_argument("--seed", action="store", type=int)
+
 	args = parser.parse_args()
 
 	if not args.log:
@@ -160,5 +163,8 @@ if __name__ == "__main__":
 
 	if not args.model and not args.weights:
 		raise RuntimeError("Cannot finetune a model without initial weights.")
+
+	if args.seed is not None:
+		seed_everything(args.seed)
 
 	main(args) # TODO: SOLVE THIS (?) It ate all the RAM from arale
