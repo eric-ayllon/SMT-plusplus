@@ -24,9 +24,11 @@ def main(config:ExperimentConfig, fold:int, weights_path:str=None):
         logger.info(f"Loading weights from {weights_path}")
         model_wrapper = SMTPP_Trainer.load_from_checkpoint(weights_path)
     
-    wandb_logger = WandbLogger(project='SMTPP', group="Mozarteum", name="SMTPP_Mozarteum_Synthetic", log_model=False)
+    # wandb_logger = WandbLogger(project='SMTPP', group="Mozarteum", name="SMTPP_Mozarteum_Synthetic", log_model=False)
+    wandb_logger = WandbLogger(project='SMTPP', group="Polish_Scores", name="SMTPP_Polish_Scores_Synthetic", log_model=False)
     
-    checkpointer = ModelCheckpoint(dirpath="weights/finetuning/", filename="SMTPP_Mozarteum_Synthetic", save_on_train_epoch_end=True)
+    # checkpointer = ModelCheckpoint(dirpath="weights/finetuning/", filename="SMTPP_Mozarteum_Synthetic", save_on_train_epoch_end=True)
+    checkpointer = ModelCheckpoint(dirpath="weights/finetuning/", filename="SMTPP_Polish_Scores_Synthetic", save_on_train_epoch_end=True)
 
     trainer = Trainer(max_epochs=100,
                       check_val_every_n_epoch=5, 
