@@ -17,3 +17,4 @@ scikit-image
 fire
 datasets
 peft
+pandas

@@ -2,8 +2,11 @@ FROM pytorch/pytorch:2.0.0-cuda11.7-cudnn8-devel
 
 ARG USERNAME
 ARG UID
+ARG USERHOME
 
-RUN useradd -u ${UID} ${USERNAME}
+RUN mkdir -p ${USERHOME}
+RUN useradd -m -d ${USERHOME} -u ${UID} ${USERNAME}
+RUN chown -R ${UID}:${UID} ${USERHOME}
 
 RUN apt update --fix-missing
 RUN apt install build-essential -y
@@ -24,3 +27,13 @@ RUN pip install pybind11
 COPY requirements.txt ./
 
 RUN pip install --no-cache-dir -r requirements.txt
+
+COPY /hf_file /hf_file
+RUN chown ${UID}:${UID} /hf_file
+
+USER ${USERNAME}
+RUN huggingface-cli login --token $(cat /hf_file)
+
+USER root
+
+RUN rm /hf_file

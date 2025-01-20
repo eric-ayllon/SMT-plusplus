@@ -161,7 +161,7 @@ def getData(args: Namespace):
 								batch_size=1,
 								num_workers=0, # 20
 								tokenization_mode="bekern",
-								reduce_ratio=1.0
+								reduce_ratio=dataConfig["reduce_ratio"]
 								)
 
 	return dataset
