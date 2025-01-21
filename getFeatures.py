@@ -15,6 +15,7 @@ import numpy as np
 import torch
 import yaml
 
+from torch.utils.data import DataLoader
 from torchvision import transforms
 from datasets import load_dataset, concatenate_datasets
 
@@ -135,11 +136,13 @@ def getData(args: Namespace):
 
 	# load dataset using Huggingface
 	ds = load_dataset(dataConfig["root"]+args.dataset_name)
-	dataset = concatenate_datasets([ds["train"], ds["val"], ds["test"]])
+
+	training_dataset = concatenate_datasets([ds["train"], ds["val"]])
+	test_dataset = concatenate_datasets([ds["test"]])
 
 	# Separate selected samples for training and the rest for validation
-	train_dataset = dataset.select((i for i in dataConfig["samples_to_use"]))
-	val_dataset = dataset.select((i for i in range(len(dataset)) if i not in dataConfig["samples_to_use"]))
+	train_dataset = training_dataset.select((i for i in dataConfig["samples_to_use"]))
+	val_dataset = training_dataset.select((i for i in range(len(training_dataset)) if i not in dataConfig["samples_to_use"]))
 
 	# print("Number of training samples:", len(train_dataset))
 	# print("Number of validation samples:", len(val_dataset))
@@ -150,29 +153,31 @@ def getData(args: Namespace):
 	i2w = np.load(f"./vocab/{vocab_name}_BeKerni2w.npy", allow_pickle=True).item()
 
 	dataset = HuggingfaceDataset(
-								train_dataset, val_dataset, val_dataset, w2i, i2w,
+								train_dataset, {"validation": val_dataset}, {"validation": val_dataset, "test": test_dataset}, w2i, i2w,
 								batch_size=1,
-								num_workers=0, # 20
+								num_workers=1, # 20
 								tokenization_mode="bekern",
-								reduce_ratio=1.0
+								reduce_ratio=dataConfig["reduce_ratio"]
 								)
 
 	return dataset
 
 @torch.no_grad()
-def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDataset):
+def getFeatures(args: Namespace, model: SMTPP_Trainer, dataloader: DataLoader, num_samples: int):
 	sample_idx: int = 0
 
-	num_samples: int = len(dataset.test_dataset)
 	print("Total samples:", num_samples)
 	max_channels: int = 0
 	max_height: int = 0
 	max_width: int = 0
-	for x, _, _ in dataset.val_dataloader():
+	encoder_output: Tensor
+	split: str
+	for x, _, _, info in dataloader:
 		max_channels = max(max_channels, x.shape[1])
 		max_height = max(max_height, x.shape[2])
 		max_width = max(max_width, x.shape[3])
 		encoder_output = model.model.forward_encoder(x)
+		split = info["split"]
 
 		# print(x.shape, encoder_output.shape)
 
@@ -181,15 +186,14 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDatas
 	# print("Max width:", max_width)
 
 	if args.features == "encoder":
-		encoder_output = model.model.forward_encoder(next(iter(dataset.val_dataloader()))[0])
 		features = torch.zeros((num_samples, *encoder_output.shape[1:]))
 	else:
 		raise NotImplementedError("Cannot perform clustering with logits of an autoregressive model")
 
 	print("Could reserve space for the features without exploding")
 
-	for batch in dataset.test_dataloader():
-		x, _, _ = batch
+	for batch in dataloader:
+		x, _, _, _ = batch
 		X = torch.zeros((x.shape[0], max_channels, max_height, max_width))
 		X[:, :x.shape[1], :x.shape[2], :x.shape[3]] = x
 
@@ -201,7 +205,7 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataset: HuggingfaceDatas
 
 		sample_idx += 1
 
-	features_file_name = f"{args.dataset_name}-{args.features}.npy"
+	features_file_name = f"{args.dataset_name}-{args.features}-{split}.npy"
 	np.save(f"{args.output_dir}/{features_file_name}", features.flatten(1).numpy())
 	print("Successfully saved the features.")
 
@@ -215,7 +219,12 @@ def main(args: Namespace):
 	smt_trainer = SMTPP_Trainer.load_from_checkpoint(args.weights)
 	print("After loading the model")
 
-	getFeatures(args, smt_trainer, dataset)
+	for ds_idx, ds in enumerate(dataset.test_datasets):
+		num_samples = len(ds)
+		dataset.batch_size = num_samples
+		dataloader = dataset.test_dataloader()[ds_idx]
+
+		getFeatures(args, smt_trainer, dataloader, num_samples)
 
 if __name__ == "__main__":
 	parser = ArgumentParser(
