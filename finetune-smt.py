@@ -119,8 +119,8 @@ def main(args: Namespace):
 	model_wrapper = getModelWrapper(args)
 
 	trainer.fit(model_wrapper, datamodule=data)
-	model_wrapper = SMTPP_Trainer.load_from_checkpoint(output_file) # Retrieve best weights
-	trainer.test(model_wrapper, data)
+	model_wrapper = model_wrapper.to("cpu")
+	trainer.test(model_wrapper, data, ckpt_path=output_file)
 
 if __name__ == "__main__":
 	parser = ArgumentParser(

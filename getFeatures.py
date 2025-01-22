@@ -177,7 +177,7 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataloader: DataLoader, n
 		max_height = max(max_height, x.shape[2])
 		max_width = max(max_width, x.shape[3])
 		encoder_output = model.model.forward_encoder(x)
-		split = info["split"]
+		split = info[0]["split"]
 
 		# print(x.shape, encoder_output.shape)
 
@@ -199,11 +199,11 @@ def getFeatures(args: Namespace, model: SMTPP_Trainer, dataloader: DataLoader, n
 
 		if args.features == "encoder":
 			encoder_output = model.model.forward_encoder(X)
-			features[sample_idx:sample_idx+1] = encoder_output
+			features[sample_idx:sample_idx+X.shape[0]] = encoder_output
 		else:
 			raise NotImplementedError("Cannot perform clustering with logits of an autoregressive model")
 
-		sample_idx += 1
+		sample_idx += X.shape[0]
 
 	features_file_name = f"{args.dataset_name}-{args.features}-{split}.npy"
 	np.save(f"{args.output_dir}/{features_file_name}", features.flatten(1).numpy())

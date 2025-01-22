@@ -5,6 +5,7 @@ import numpy as np
 import torch.nn as nn
 import lightning.pytorch as L
 
+from collections import defaultdict
 from torchinfo import summary
 from eval_functions import compute_poliphony_metrics, parse_krn_content
 from smt_model.configuration_smt import SMTConfig
@@ -57,17 +58,20 @@ class SMTPP_Trainer(L.LightningModule):
         return loss
     
     def on_train_epoch_end(self) -> None:
-        self.logger.experiment.log({"worst_training_loss": [wandb.Image(self.worst_image.squeeze(0).cpu().numpy())]})
-        self.logger.experiment.log({"best_training_loss": [wandb.Image(self.best_image.squeeze(0).cpu().numpy())]})
+        # self.logger.experiment.log({"worst_training_loss": [wandb.Image(self.worst_image.squeeze(0).cpu().numpy())]})
+        # self.logger.experiment.log({"best_training_loss": [wandb.Image(self.best_image.squeeze(0).cpu().numpy())]})
         
         self.worst_loss = -1
         self.worst_image = None
         self.best_loss = np.inf
         self.best_image = None
         
+    def on_validation_epoch_start(self) -> None:
+        self.preds = defaultdict(list)
+        self.grtrs = defaultdict(list)
     
     def validation_step(self, val_batch, batch_idx: int, dataloader_idx: int = 0):
-        x, dec_in, y, _ = val_batch
+        x, dec_in, y, info = val_batch
         predicted_sequence, _, _ = self.model.predict(input=x)
         
         dec = "".join(predicted_sequence)
@@ -80,25 +84,25 @@ class SMTPP_Trainer(L.LightningModule):
         gt = gt.replace("<b>", "\n")
         gt = gt.replace("<s>", " ")
 
-        self.preds.append(dec)
-        self.grtrs.append(gt)
+        split = info[0]["split"]
+
+        self.preds[split].append(dec)
+        self.grtrs[split].append(gt)
         
-    def on_validation_epoch_end(self, metric_name="val") -> None:
-        cer, ser, ler = compute_poliphony_metrics(self.preds, self.grtrs)
-        
-        random_index = random.randint(0, len(self.preds)-1)
-        predtoshow = self.preds[random_index]
-        gttoshow = self.grtrs[random_index]
-        print(f"[Prediction] - {predtoshow}")
-        print(f"[GT] - {gttoshow}")
-        
-        self.log(f'{metric_name}_CER', cer, on_epoch=True, prog_bar=True)
-        self.log(f'{metric_name}_SER', ser, on_epoch=True, prog_bar=True)
-        self.log(f'{metric_name}_LER', ler, on_epoch=True, prog_bar=True)
-        
-        self.preds = []
-        self.grtrs = []
-        
+    def on_validation_epoch_end(self) -> None:
+        for split in self.preds.keys():
+            cer, ser, ler = compute_poliphony_metrics(self.preds[split], self.grtrs[split])
+
+            random_index = random.randint(0, len(self.preds[split])-1)
+            predtoshow = self.preds[split][random_index]
+            gttoshow = self.grtrs[split][random_index]
+            print(f"[Prediction] - {predtoshow}")
+            print(f"[GT] - {gttoshow}")
+
+            self.log(f'{split}_CER', cer, on_epoch=True, prog_bar=True)
+            self.log(f'{split}_SER', ser, on_epoch=True, prog_bar=True)
+            self.log(f'{split}_LER', ler, on_epoch=True, prog_bar=True)
+
         return ser
     
     def on_test_epoch_start(self) -> None:
@@ -114,14 +118,14 @@ class SMTPP_Trainer(L.LightningModule):
         self.logger.experiment.define_metric("edit distance", step_metric="sample", summary="none") # sample edit distance
         self.logger.experiment.define_metric("length", step_metric="sample", summary="none") # sample edit distance
 
-        self.test_sample_id: int = 0
+        self.test_sample_id = defaultdict(int)
+        self.preds = defaultdict(list)
+        self.grtrs = defaultdict(list)
     
     # def test_step(self, test_batch) -> torch.Tensor | torch.Dict[str, torch.Any] | None:
     def test_step(self, test_batch, batch_idx: int, dataloader_idx: int = 0):
         x, dec_in, y, info = test_batch
         predicted_sequence, _, logits = self.model.predict(input=x)
-
-        split = info[0]["split"]
         
         dec = "".join(predicted_sequence)
         dec = dec.replace("<t>", "\t")
@@ -133,8 +137,10 @@ class SMTPP_Trainer(L.LightningModule):
         gt = gt.replace("<b>", "\n")
         gt = gt.replace("<s>", " ")
 
-        self.preds.append(dec)
-        self.grtrs.append(gt)
+        split = info[0]["split"]
+
+        self.preds[split].append(dec)
+        self.grtrs[split].append(gt)
 
         _, ser, _ = compute_poliphony_metrics([dec], [gt])
 
@@ -145,7 +151,7 @@ class SMTPP_Trainer(L.LightningModule):
 
         self.logger.log_metrics({
                     "split": split,
-                    "sample": self.test_sample_id,
+                    "sample": self.test_sample_id[split],
                     "confidences": confidences,
                     "prediction": prediction,
                     "target": target,
@@ -153,24 +159,20 @@ class SMTPP_Trainer(L.LightningModule):
                     "length": len(target),
                     })
 
-        self.test_sample_id += 1
-    
-    def on_test_epoch_end(self) -> None:
-        cer, ser, ler = compute_poliphony_metrics(self.preds, self.grtrs)
-        
-        random_index = random.randint(0, len(self.preds)-1)
-        predtoshow = self.preds[random_index]
-        gttoshow = self.grtrs[random_index]
-        print(f"[Prediction] - {predtoshow}")
-        print(f"[GT] - {gttoshow}")
-        
-        self.log(f'total CER', cer, on_epoch=True, prog_bar=True)
-        self.log(f'total SER', ser, on_epoch=True, prog_bar=True)
-        self.log(f'total LER', ler, on_epoch=True, prog_bar=True)
-        
-        self.preds = []
-        self.grtrs = []
+        self.test_sample_id[split] += 1
 
-        del self.test_sample_id
+    def on_test_epoch_end(self) -> None:
+        for split in self.preds.keys():
+            cer, ser, ler = compute_poliphony_metrics(self.preds[split], self.grtrs[split])
+
+            random_index = random.randint(0, len(self.preds[split])-1)
+            predtoshow = self.preds[split][random_index]
+            gttoshow = self.grtrs[split][random_index]
+            print(f"[Prediction] - {predtoshow}")
+            print(f"[GT] - {gttoshow}")
+
+            self.log(f"{split}/total CER", cer, on_epoch=True, prog_bar=True)
+            self.log(f"{split}/total SER", ser, on_epoch=True, prog_bar=True)
+            self.log(f"{split}/total LER", ler, on_epoch=True, prog_bar=True)
 
         return ser
