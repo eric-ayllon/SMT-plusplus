@@ -103,9 +103,9 @@ def main(args: Namespace):
 
 	checkpointer_file = f"{args.dataset_config}{fold_str}"
 	output_file = args.checkpointer_path+"/"+checkpointer_file+".ckpt"
-	checkpointer = ModelCheckpoint(monitor="val_SER", mode='min', verbose=True, save_top_k=1, filename=checkpointer_file, dirpath=args.checkpointer_path)
+	checkpointer = ModelCheckpoint(monitor="validation_SER", mode='min', verbose=True, save_top_k=1, filename=checkpointer_file, dirpath=args.checkpointer_path)
 
-	early_stopping = EarlyStopping(monitor="val_SER", mode="min", verbose=True, min_delta=0.01, patience=5)
+	early_stopping = EarlyStopping(monitor="validation_SER", mode="min", verbose=True, min_delta=0.01, patience=5)
 
 	trainer = getTrainer(
 				args.max_epochs,
