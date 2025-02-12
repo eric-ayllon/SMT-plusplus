@@ -50,7 +50,7 @@ def getData(args: Namespace):
 	i2w = np.load(f"./vocab/{vocab_name}_BeKerni2w.npy", allow_pickle=True).item()
 
 	dataset = HuggingfaceDataset(
-								train_dataset, {"validation": training_dataset}, {"validation": training_dataset, "test": test_dataset}, w2i, i2w,
+								training_dataset, {"validation": training_dataset}, {"validation": training_dataset, "test": test_dataset}, w2i, i2w,
 								batch_size=1,
 								num_workers=1, # 20
 								tokenization_mode="bekern",
